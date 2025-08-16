@@ -18,6 +18,28 @@
 - **🐳 Docker Ready**: Containerized deployment with proper Tor integration
 - **📝 Structured Output**: JSON-based analysis results for easy integration
 
+## 🚧 Roadmap & TODO
+
+### 🔥 High Priority
+- [ ] **Frontend**: Create a modern web interface for easy interaction
+- [ ] **Multiple Search Engine Support**: Integrate additional search engines beyond Ahmia
+- [ ] **Multiple LLMs and Models**: Support for various AI models (GPT-4, Claude, etc.)
+
+### ⚡ Performance & Scalability
+- [ ] **Concurrent Tor Sessions**: Implement multiple Tor circuits for faster crawling
+- [ ] **Concurrent Analysis**: Parallel processing of multiple sites for improved speed
+
+### 📊 Reporting & Output
+- [ ] **PDF OSINT Report**: Generate comprehensive PDF reports with findings and analysis
+
+### 🎯 Future Enhancements
+- [ ] **Real-time Monitoring**: Live tracking of onion sites and changes
+- [ ] **Advanced Analytics**: Machine learning-based threat detection
+- [ ] **API Rate Limiting**: Intelligent throttling to avoid detection
+- [ ] **Custom YARA Rules**: User-defined pattern matching rules
+- [ ] **Export Formats**: Support for CSV, JSON, XML exports
+- [ ] **Scheduled Scans**: Automated periodic monitoring of target sites
+
 ## 🏗️ Architecture
 
 ```
