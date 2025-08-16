@@ -1,0 +1,10 @@
+fastapi==0.112.2
+uvicorn[standard]==0.30.6
+requests>=2.31.0
+beautifulsoup4>=4.12.3
+lxml>=5.2.2
+pysocks>=1.7.1
+yara-python; platform_system != 'Darwin'  # optional; may require manual install on macOS
+python-dotenv>=1.0.1
+pydantic>=2.7.0
+
