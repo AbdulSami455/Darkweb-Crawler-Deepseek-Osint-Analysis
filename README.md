@@ -332,9 +332,9 @@ The developers are not responsible for any misuse of this software.
 
 ## 📞 Support
 
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/Darkweb-Crawler-Deepseek-Osint-Analysis/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/Darkweb-Crawler-Deepseek-Osint-Analysis/discussions)
-- **Documentation**: [Wiki](https://github.com/yourusername/Darkweb-Crawler-Deepseek-Osint-Analysis/wiki)
+- **GitHub Issues**: [Create an issue](https://github.com/AbdulSami455/Darkweb-Crawler-Deepseek-Osint-Analysis/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/AbdulSami455/Darkweb-Crawler-Deepseek-Osint-Analysis/discussions)
+- **Documentation**: [Wiki](https://github.com/AbdulSami455/Darkweb-Crawler-Deepseek-Osint-Analysis/wiki)
 
 ---
 
