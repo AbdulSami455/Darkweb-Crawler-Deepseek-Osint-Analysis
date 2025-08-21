@@ -2,6 +2,7 @@
 """
 Non-interactive analyzer that vendors TorCrawl and calls OpenRouter DeepSeek
 to produce structured JSON analysis for a provided URL (including .onion).
+Supports both traditional JSON analysis and LangChain structured data extraction.
 """
 
 import os
@@ -14,6 +15,14 @@ from typing import Dict, Optional, Tuple, List, Any
 
 import requests
 import sys
+
+# Import LangChain components
+try:
+    from .langchain_analysis import LangChainAnalyzer
+    from .models import DarkWebAnalysis
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
 
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -187,6 +196,7 @@ class OnionScrapAnalyzer:
         return content or None, output_folder, result.stdout, result.stderr, debug_cmd
 
     def analyze_with_deepseek(self, content: str, analysis_prompt: Optional[str] = None) -> Dict:
+        """Traditional JSON analysis using direct API calls."""
         if not self.api_key:
             return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
 
@@ -260,11 +270,41 @@ class OnionScrapAnalyzer:
             "tokens_used": result.get("usage", {}).get("total_tokens", 0),
         }
 
+    def analyze_with_langchain(self, content: str) -> Dict:
+        """Structured analysis using LangChain and Pydantic models."""
+        if not LANGCHAIN_AVAILABLE:
+            return {
+                "success": False, 
+                "error": "LangChain not available. Install langchain, langchain-openai, and langchain-community packages."
+            }
+        
+        if not self.api_key:
+            return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
+
+        try:
+            langchain_analyzer = LangChainAnalyzer(api_key=self.api_key)
+            result = langchain_analyzer.analyze_content_with_fallback(content)
+            
+            # Add metadata about the analysis method
+            if result["success"]:
+                result["analysis_method"] = "langchain_structured"
+                result["model"] = "deepseek/deepseek-r1-0528:free"
+            
+            return result
+            
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": f"LangChain analysis error: {str(exc)}",
+                "analysis_method": "langchain_structured"
+            }
+
     def run_full_analysis(
         self,
         url: str,
         depth: int = 1,
         custom_prompt: Optional[str] = None,
+        use_langchain: bool = False,
     ) -> Dict:
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -309,7 +349,13 @@ class OnionScrapAnalyzer:
             }
 
         # AI Analysis
-        analysis_result = self.analyze_with_deepseek(content, custom_prompt)
+        if use_langchain:
+            print(f"[OnionScrap] Step: Using LangChain structured analysis")
+            analysis_result = self.analyze_with_langchain(content)
+        else:
+            print(f"[OnionScrap] Step: Using traditional JSON analysis")
+            analysis_result = self.analyze_with_deepseek(content, custom_prompt)
+        
         print(f"[OnionScrap] Step: Analysis -> success={analysis_result.get('success')} tokens={analysis_result.get('tokens_used')}")
 
         response: Dict[str, Any] = {
@@ -317,11 +363,13 @@ class OnionScrapAnalyzer:
             "analysis": analysis_result.get("analysis"),
             "model": analysis_result.get("model"),
             "tokens_used": analysis_result.get("tokens_used"),
+            "analysis_method": analysis_result.get("analysis_method", "traditional_json"),
             "metadata": {
                 "started_at": started_at,
                 "url": url,
                 "depth": depth,
                 "tor_listening": self._is_tor_listening(),
+                "use_langchain": use_langchain,
             },
             "error": analysis_result.get("error"),
             "details": analysis_result.get("details"),

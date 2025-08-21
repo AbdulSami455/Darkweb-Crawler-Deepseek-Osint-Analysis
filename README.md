@@ -17,12 +17,14 @@
 - **📈 RESTful API**: FastAPI-based service with comprehensive endpoints
 - **🐳 Docker Ready**: Containerized deployment with proper Tor integration
 - **📝 Structured Output**: JSON-based analysis results for easy integration
+- **🔗 LangChain Integration**: Advanced structured data extraction with Pydantic models
 
 ## 🚧 Roadmap & TODO
 
 - [ ] **Frontend**: Create a modern web interface for easy interaction
 - [ ] **Multiple Search Engine Support**: Integrate additional search engines beyond Ahmia
 - [ ] **Multiple LLMs and Models**: Support for various AI models (GPT-4, Claude, etc.)
+- [x] **LangChain Integration**: Structured data extraction with Pydantic models
 
 - [ ] **Concurrent Tor Sessions**: Implement multiple Tor circuits for faster crawling
 - [ ] **Concurrent Analysis**: Parallel processing of multiple sites for improved speed
@@ -221,7 +223,64 @@ response = requests.post(
 )
 result = response.json()
 print(f"Analysis: {result['analysis']}")
+
+# Analyze with LangChain structured output
+response = requests.post(
+    "http://localhost:8000/analyze",
+    json={
+        "url": "http://example.onion",
+        "depth": 1,
+        "use_langchain": True
+    }
+)
+result = response.json()
+if result["success"]:
+    analysis = result["analysis"]
+    print(f"Categories: {analysis['categories']}")
+    print(f"Contact methods: {len(analysis['key_information']['contact_methods'])}")
 ```
+
+## 🔗 LangChain Integration
+
+The project now includes LangChain integration for advanced structured data extraction. This provides:
+
+- **Type Safety**: Pydantic models ensure data consistency and validation
+- **Structured Output**: Predictable, well-defined data structures
+- **Better Error Handling**: Graceful fallbacks when structured parsing fails
+- **Extensibility**: Easy to add new fields and validation rules
+
+### LangChain Features
+
+- **ContactMethod**: Telegram, Email, Jabber, Tox contacts
+- **CryptoWallet**: Bitcoin, Ethereum, Monero wallets
+- **PGPKey**: PGP key fingerprints and metadata
+- **OnionLink**: .onion URL analysis
+- **ProductService**: Product/service listings with pricing
+- **SecurityAssessment**: Security indicators and risks
+
+### Usage
+
+```python
+from app.analysis import OnionScrapAnalyzer
+
+# Initialize analyzer
+analyzer = OnionScrapAnalyzer()
+
+# Run analysis with LangChain
+result = analyzer.run_full_analysis(
+    url="http://example.onion",
+    depth=1,
+    use_langchain=True
+)
+
+if result["success"]:
+    analysis = result["analysis"]
+    print(f"Content Summary: {analysis['content_summary']}")
+    print(f"Categories: {analysis['categories']}")
+    print(f"Reliability: {analysis['source_reliability']}/5")
+```
+
+For detailed documentation, see [LANGCHAIN_INTEGRATION.md](darkweb-crawler/LANGCHAIN_INTEGRATION.md).
 
 ## 🔧 Configuration
 
