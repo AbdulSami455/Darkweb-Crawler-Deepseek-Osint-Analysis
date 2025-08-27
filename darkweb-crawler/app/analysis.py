@@ -26,7 +26,7 @@ except ImportError:
 
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEEPSEEK_MODEL = "deepseek/deepseek-r1-0528:free"
+DEEPSEEK_MODEL = "deepseek/deepseek-r1:free"
 
 
 def _get_torcrawl_path() -> Path:
@@ -73,9 +73,11 @@ class OnionScrapAnalyzer:
             )
             if result.returncode == 0 and result.stdout.strip().isdigit():
                 status_code = int(result.stdout.strip())
-                ok = status_code in [200, 301, 302, 403, 404, 500]
+                ok = status_code >= 100 and status_code < 600 
                 return ok, status_code, result.stdout, result.stderr
-            return False, None, result.stdout, result.stderr
+            else:
+                error_msg = f"Curl failed with return code {result.returncode}, stdout: {result.stdout}, stderr: {result.stderr}"
+                return False, None, result.stdout, result.stderr
         except Exception as exc:
             return False, None, "", str(exc)
 
@@ -324,12 +326,11 @@ class OnionScrapAnalyzer:
         normalized_url = self._normalize_onion_url(url)
         ok, status_code, curl_out, curl_err = self.test_connectivity_through_tor(normalized_url)
         print(f"[OnionScrap] Step: Connectivity test via Tor -> ok={ok} status={status_code}")
+        connectivity_warning = None
         if not ok:
-            return {
-                "success": False,
-                "error": "Connectivity test via Tor failed for target URL",
-                "metadata": {"started_at": started_at, "url": url},
-            }
+            connectivity_warning = f"Connectivity test failed (status={status_code}, curl_out={curl_out}, curl_err={curl_err})"
+            print(f"[OnionScrap] Warning: {connectivity_warning}")
+            print(f"[OnionScrap] Continuing with TorCrawl anyway - some onion sites fail connectivity tests but are still accessible")
 
         # Run torcrawl
         content, output_folder, raw_stdout, raw_stderr, cmd = self.run_torcrawl(url=normalized_url, depth=depth)
@@ -370,6 +371,7 @@ class OnionScrapAnalyzer:
                 "depth": depth,
                 "tor_listening": self._is_tor_listening(),
                 "use_langchain": use_langchain,
+                "connectivity_warning": connectivity_warning,
             },
             "error": analysis_result.get("error"),
             "details": analysis_result.get("details"),
