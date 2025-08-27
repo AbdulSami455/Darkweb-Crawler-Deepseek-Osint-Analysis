@@ -16,7 +16,6 @@ from typing import Dict, Optional, Tuple, List, Any
 import requests
 import sys
 
-# Import LangChain components
 try:
     from .langchain_analysis import LangChainAnalyzer
     from .models import DarkWebAnalysis
@@ -26,7 +25,18 @@ except ImportError:
 
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEEPSEEK_MODEL = "deepseek/deepseek-r1:free"
+
+DEFAULT_MODEL = "deepseek/deepseek-r1:free"
+
+POPULAR_MODELS = {
+    "deepseek": "deepseek/deepseek-r1:free",
+    "claude": "anthropic/claude-3.5-sonnet:free", 
+    "gpt": "openai/gpt-3.5-turbo:free",
+    "llama": "meta-llama/llama-3.1-8b-instruct:free",
+    "gemini": "google/gemini-flash-1.5:free",
+    "gpt4": "openai/gpt-4:free",
+    "claude3": "anthropic/claude-3-haiku:free",
+}
 
 
 def _get_torcrawl_path() -> Path:
@@ -34,8 +44,9 @@ def _get_torcrawl_path() -> Path:
 
 
 class OnionScrapAnalyzer:
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+        self.model = model or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}" if self.api_key else "",
             "Content-Type": "application/json",
@@ -88,6 +99,66 @@ class OnionScrapAnalyzer:
             if url.startswith("https://"):
                 return url.replace("https://", "http://", 1)
         return url
+
+    def _test_model_availability(self, model: str) -> bool:
+        """Test if a specific model is available."""
+        if not self.api_key:
+            # If no API key, assume model is available (for testing)
+            return True
+            
+        try:
+            # Simple test request to check model availability
+            test_payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 10,
+            }
+            
+            response = requests.post(
+                f"{OPENROUTER_BASE_URL}/chat/completions",
+                headers=self.headers,
+                json=test_payload,
+                timeout=10,
+            )
+            
+            # If we get a 200, model is available
+            if response.status_code == 200:
+                return True
+            # If we get 429 (rate limit), model is available but rate limited
+            elif response.status_code == 429:
+                print(f"[OnionScrap] Warning: Model {model} is rate limited")
+                return False
+            # Other errors might indicate model is available but request was malformed
+            else:
+                print(f"[OnionScrap] Warning: Model {model} returned status {response.status_code}")
+                return True
+                
+        except Exception as exc:
+            print(f"[OnionScrap] Error testing model {model}: {exc}")
+            return False
+
+    def get_available_models(self) -> List[str]:
+        """Get list of available models from OpenRouter."""
+        if not self.api_key:
+            return list(POPULAR_MODELS.values())
+            
+        try:
+            response = requests.get(
+                f"{OPENROUTER_BASE_URL}/models",
+                headers=self.headers,
+                timeout=10,
+            )
+            
+            if response.status_code == 200:
+                models_data = response.json()
+                return [model["id"] for model in models_data.get("data", [])]
+            else:
+                print(f"[OnionScrap] Error fetching models: {response.status_code}")
+                return list(POPULAR_MODELS.values())
+                
+        except Exception as exc:
+            print(f"[OnionScrap] Error fetching available models: {exc}")
+            return list(POPULAR_MODELS.values())
 
     def run_torcrawl(
         self,
@@ -197,10 +268,14 @@ class OnionScrapAnalyzer:
 
         return content or None, output_folder, result.stdout, result.stderr, debug_cmd
 
-    def analyze_with_deepseek(self, content: str, analysis_prompt: Optional[str] = None) -> Dict:
-        """Traditional JSON analysis using direct API calls."""
+    def analyze_with_deepseek(self, content: str, analysis_prompt: Optional[str] = None, model: Optional[str] = None) -> Dict:
+        """Traditional JSON analysis using direct API calls with specified model."""
         if not self.api_key:
             return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
+
+        # Use specified model or default
+        selected_model = model or self.model
+        print(f"[OnionScrap] Using model: {selected_model}")
 
         if not analysis_prompt:
             analysis_prompt = (
@@ -231,7 +306,7 @@ class OnionScrapAnalyzer:
             )
 
         payload = {
-            "model": DEEPSEEK_MODEL,
+            "model": selected_model,
             "messages": [
                 {
                     "role": "system",
@@ -246,33 +321,50 @@ class OnionScrapAnalyzer:
             "temperature": 0.3,
         }
 
-        try:
-            response = requests.post(
-                f"{OPENROUTER_BASE_URL}/chat/completions",
-                headers=self.headers,
-                json=payload,
-                timeout=90,
-            )
-        except Exception as exc:
-            return {"success": False, "error": f"API call error: {exc}"}
+        # Simple retry logic for network issues (not model switching)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f"{OPENROUTER_BASE_URL}/chat/completions",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=90,
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    analysis = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    return {
+                        "success": True,
+                        "analysis": analysis,
+                        "model": selected_model,
+                        "tokens_used": result.get("usage", {}).get("total_tokens", 0),
+                    }
+                elif response.status_code == 429:
+                    return {
+                        "success": False,
+                        "error": f"Rate limited on model {selected_model}",
+                        "details": response.text,
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"API Error: {response.status_code}",
+                        "details": response.text,
+                    }
+                    
+            except Exception as exc:
+                if attempt < max_retries - 1:
+                    print(f"[OnionScrap] API call failed on attempt {attempt + 1}: {exc}")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                else:
+                    return {"success": False, "error": f"API call error after {max_retries} attempts: {exc}"}
 
-        if response.status_code != 200:
-            return {
-                "success": False,
-                "error": f"API Error: {response.status_code}",
-                "details": response.text,
-            }
+        return {"success": False, "error": "All retry attempts failed"}
 
-        result = response.json()
-        analysis = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        return {
-            "success": True,
-            "analysis": analysis,
-            "model": DEEPSEEK_MODEL,
-            "tokens_used": result.get("usage", {}).get("total_tokens", 0),
-        }
-
-    def analyze_with_langchain(self, content: str) -> Dict:
+    def analyze_with_langchain(self, content: str, model: Optional[str] = None) -> Dict:
         """Structured analysis using LangChain and Pydantic models."""
         if not LANGCHAIN_AVAILABLE:
             return {
@@ -284,8 +376,8 @@ class OnionScrapAnalyzer:
             return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
 
         try:
-            langchain_analyzer = LangChainAnalyzer(api_key=self.api_key)
-            result = langchain_analyzer.analyze_content_with_fallback(content)
+            langchain_analyzer = LangChainAnalyzer(api_key=self.api_key, model=model)
+            result = langchain_analyzer.analyze_content_with_fallback(content, model)
             
             # Add metadata about the analysis method
             if result["success"]:
@@ -307,6 +399,7 @@ class OnionScrapAnalyzer:
         depth: int = 1,
         custom_prompt: Optional[str] = None,
         use_langchain: bool = False,
+        model: Optional[str] = None,
     ) -> Dict:
         started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -352,10 +445,10 @@ class OnionScrapAnalyzer:
         # AI Analysis
         if use_langchain:
             print(f"[OnionScrap] Step: Using LangChain structured analysis")
-            analysis_result = self.analyze_with_langchain(content)
+            analysis_result = self.analyze_with_langchain(content, model)
         else:
             print(f"[OnionScrap] Step: Using traditional JSON analysis")
-            analysis_result = self.analyze_with_deepseek(content, custom_prompt)
+            analysis_result = self.analyze_with_deepseek(content, custom_prompt, model)
         
         print(f"[OnionScrap] Step: Analysis -> success={analysis_result.get('success')} tokens={analysis_result.get('tokens_used')}")
 

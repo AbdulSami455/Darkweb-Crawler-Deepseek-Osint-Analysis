@@ -13,6 +13,8 @@ class AnalyzeRequest(BaseModel):
     url: str = Field(..., description="Onion or clearnet URL to analyze")
     depth: int = Field(1, ge=0, le=3, description="Crawl depth for TorCrawl")
     prompt: Optional[str] = Field(None, description="Custom analysis prompt override")
+    model: Optional[str] = Field(None, description="OpenRouter model to use (e.g., 'deepseek/deepseek-r1:free', 'anthropic/claude-3.5-sonnet:free')")
+    use_langchain: bool = Field(False, description="Use LangChain structured analysis instead of traditional JSON")
 
 
 class AnalyzeResponse(BaseModel):
@@ -30,6 +32,8 @@ class BulkSearchRequest(BaseModel):
     max_sites: int = Field(5, ge=1, le=20, description="Maximum number of sites to analyze")
     depth: int = Field(1, ge=0, le=3, description="Crawl depth for TorCrawl")
     prompt: Optional[str] = Field(None, description="Custom analysis prompt override")
+    model: Optional[str] = Field(None, description="OpenRouter model to use (e.g., 'deepseek/deepseek-r1:free', 'anthropic/claude-3.5-sonnet:free')")
+    use_langchain: bool = Field(False, description="Use LangChain structured analysis instead of traditional JSON")
     days: Optional[int] = Field(None, ge=1, le=30, description="Number of days to search back (1, 7, 30)")
 
 
@@ -54,11 +58,13 @@ def healthz() -> Dict[str, str]:
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
-    analyzer = OnionScrapAnalyzer()
+    analyzer = OnionScrapAnalyzer(model=req.model)
     result = analyzer.run_full_analysis(
         url=req.url,
         depth=req.depth,
         custom_prompt=req.prompt,
+        use_langchain=req.use_langchain,
+        model=req.model,
     )
     # Best-effort: parse analysis string into JSON if possible
     analysis_value: Any = result.get("analysis")
@@ -87,6 +93,8 @@ def bulk_search(req: BulkSearchRequest) -> BulkSearchResponse:
             max_sites=req.max_sites,
             depth=req.depth,
             custom_prompt=req.prompt,
+            model=req.model,
+            use_langchain=req.use_langchain,
             days=req.days
         )
         

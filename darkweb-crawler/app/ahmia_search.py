@@ -162,7 +162,7 @@ class AhmiaSearchAnalyzer:
             print(f"Error extracting result: {e}")
             return None
     
-    def analyze_onion_site(self, onion_url: str, depth: int = 1, custom_prompt: Optional[str] = None) -> Dict:
+    def analyze_onion_site(self, onion_url: str, depth: int = 1, custom_prompt: Optional[str] = None, model: Optional[str] = None, use_langchain: bool = False) -> Dict:
         """
         Analyze a single onion site using TorCrawl and AI analysis
         
@@ -180,6 +180,8 @@ class AhmiaSearchAnalyzer:
                 url=onion_url,
                 depth=depth,
                 custom_prompt=custom_prompt,
+                model=model,
+                use_langchain=use_langchain,
             )
             return {
                 'onion_url': onion_url,
@@ -200,6 +202,8 @@ class AhmiaSearchAnalyzer:
         max_sites: int = 5, 
         depth: int = 1, 
         custom_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        use_langchain: bool = False,
         days: Optional[int] = None
     ) -> Dict:
         """
@@ -256,7 +260,9 @@ class AhmiaSearchAnalyzer:
             analysis = self.analyze_onion_site(
                 result['onion_url'], 
                 depth, 
-                custom_prompt
+                custom_prompt,
+                model,
+                use_langchain
             )
             
             # Combine search result with analysis

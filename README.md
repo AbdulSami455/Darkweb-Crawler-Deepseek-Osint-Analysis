@@ -36,6 +36,23 @@
 - [ ] **Export Formats**: Support for CSV, JSON, XML exports
 - [ ] **Scheduled Scans**: Automated periodic monitoring of target sites
 
+## 🎯 Model Selection & Fallback
+
+The system now supports automatic model selection with intelligent fallback:
+
+### Available Models (in order of preference):
+1. **DeepSeek R1** (`deepseek/deepseek-r1:free`) - Primary choice
+2. **Claude 3.5 Sonnet** (`anthropic/claude-3.5-sonnet:free`) - Fallback 1
+3. **GPT-3.5 Turbo** (`openai/gpt-3.5-turbo:free`) - Fallback 2
+4. **Llama 3.1** (`meta-llama/llama-3.1-8b-instruct:free`) - Fallback 3
+5. **Gemini Flash** (`google/gemini-flash-1.5:free`) - Fallback 4
+
+### Features:
+- ✅ **Automatic Selection**: Tests each model for availability
+- ✅ **Rate Limit Handling**: Switches to next model if rate limited
+- ✅ **Retry Logic**: Exponential backoff with model switching
+- ✅ **No More 429 Errors**: Automatic fallback to available models
+
 ## 🏗️ Architecture
 
 ```
@@ -46,8 +63,9 @@
          │                       │
          ▼                       ▼
 ┌─────────────────┐    ┌──────────────────┐
-│ DeepSeek AI     │    │  Ahmia Search    │
+│ Multi-Model AI  │    │  Ahmia Search    │
 │ Analysis        │    │  Engine          │
+│ (Auto-Fallback) │    │                  │
 └─────────────────┘    └──────────────────┘
 ```
 

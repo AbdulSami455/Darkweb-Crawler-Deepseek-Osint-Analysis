@@ -17,15 +17,28 @@ from .models import DarkWebAnalysis
 class LangChainAnalyzer:
     """LangChain-based analyzer for structured dark web content analysis."""
     
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
         """Initialize the LangChain analyzer."""
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY is required for LangChain analysis")
         
-        # Initialize LangChain components
-        self.llm = ChatOpenAI(
-            model="deepseek/deepseek-r1-0528:free",
+        # Use specified model or default
+        self.model = model or os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-r1-0528:free")
+        self.llm = self._create_llm(self.model)
+        
+        self.parser = PydanticOutputParser(pydantic_object=DarkWebAnalysis)
+        
+        # Create the prompt template
+        self.prompt_template = ChatPromptTemplate.from_messages([
+            ("system", self._get_system_prompt()),
+            ("human", self._get_human_prompt_template())
+        ])
+    
+    def _create_llm(self, model: str) -> ChatOpenAI:
+        """Create a ChatOpenAI instance with the specified model."""
+        return ChatOpenAI(
+            model=model,
             openai_api_key=self.api_key,
             openai_api_base="https://openrouter.ai/api/v1",
             temperature=0.3,
@@ -35,14 +48,6 @@ class LangChainAnalyzer:
                 "X-Title": "OnionScrap-API",
             }
         )
-        
-        self.parser = PydanticOutputParser(pydantic_object=DarkWebAnalysis)
-        
-        # Create the prompt template
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", self._get_system_prompt()),
-            ("human", self._get_human_prompt_template())
-        ])
     
     def _get_system_prompt(self) -> str:
         """Get the system prompt for the analysis."""
@@ -110,6 +115,8 @@ Normalization rules:
     def analyze_content(self, content: str) -> Dict[str, Any]:
         """Analyze content using LangChain and return structured data."""
         try:
+            print(f"[LangChain] Using model: {self.model}")
+            
             # Format the prompt with instructions and content
             messages = self.prompt_template.format_messages(
                 format_instructions=self.parser.get_format_instructions(),
@@ -125,23 +132,31 @@ Normalization rules:
             # Convert to dictionary for easier handling
             result = structured_analysis.model_dump()
             
+            print(f"[LangChain] Successfully analyzed with model: {self.model}")
+            
             return {
                 "success": True,
                 "analysis": result,
-                "model": "deepseek/deepseek-r1-0528:free",
+                "model": self.model,
                 "tokens_used": getattr(response, 'usage', {}).get('total_tokens', 0) if hasattr(response, 'usage') else 0,
                 "raw_response": response.content
             }
             
         except Exception as exc:
+            print(f"[LangChain] Analysis failed with model {self.model}: {str(exc)}")
             return {
                 "success": False,
                 "error": f"LangChain analysis failed: {str(exc)}",
                 "raw_response": getattr(response, 'content', '') if 'response' in locals() else ''
             }
     
-    def analyze_content_with_fallback(self, content: str) -> Dict[str, Any]:
+    def analyze_content_with_fallback(self, content: str, model: Optional[str] = None) -> Dict[str, Any]:
         """Analyze content with fallback to JSON parsing if structured parsing fails."""
+        # Use specified model if provided
+        if model:
+            self.model = model
+            self.llm = self._create_llm(model)
+        
         # Try structured analysis first
         result = self.analyze_content(content)
         
