@@ -7,6 +7,7 @@ import uvicorn
 
 from .analysis import OnionScrapAnalyzer
 from .ahmia_search import AhmiaSearchAnalyzer
+from .reporting import generate_pdf_report, build_report_filename, encode_pdf_base64
 
 
 class AnalyzeRequest(BaseModel):
@@ -15,6 +16,8 @@ class AnalyzeRequest(BaseModel):
     prompt: Optional[str] = Field(None, description="Custom analysis prompt override")
     model: Optional[str] = Field(None, description="OpenRouter model to use (e.g., 'deepseek/deepseek-r1:free', 'anthropic/claude-3.5-sonnet:free')")
     use_langchain: bool = Field(False, description="Use LangChain structured analysis instead of traditional JSON")
+    generate_pdf: bool = Field(False, description="Generate a PDF OSINT report from the analysis")
+    include_pdf_data: bool = Field(False, description="Include base64-encoded PDF in the response (may be large)")
 
 
 class AnalyzeResponse(BaseModel):
@@ -25,6 +28,8 @@ class AnalyzeResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     details: Optional[str] = None
+    pdf_path: Optional[str] = None
+    pdf_base64: Optional[str] = None
 
 
 class BulkSearchRequest(BaseModel):
@@ -78,7 +83,23 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
             result["analysis"] = analysis_value
         except Exception:
             pass
-    return AnalyzeResponse(**result)  # type: ignore[arg-type]
+    # Optionally generate a PDF report
+    pdf_path: Optional[str] = None
+    pdf_b64: Optional[str] = None
+    if req.generate_pdf and result.get("success"):
+        try:
+            pdf_path = generate_pdf_report(
+                analysis_result=result,
+                output_dir=None,
+                filename=build_report_filename(result)
+            )
+            if req.include_pdf_data and pdf_path:
+                pdf_b64 = encode_pdf_base64(pdf_path)
+        except Exception as e:
+            result.setdefault("metadata", {})
+            result["metadata"]["pdf_error"] = str(e)
+
+    return AnalyzeResponse(**{**result, "pdf_path": pdf_path, "pdf_base64": pdf_b64})  # type: ignore[arg-type]
 
 
 @app.post("/bulk-search", response_model=BulkSearchResponse)
