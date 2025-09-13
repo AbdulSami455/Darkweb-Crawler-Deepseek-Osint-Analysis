@@ -23,12 +23,12 @@
 
 - [ ] **Frontend**: Create a modern web interface for easy interaction
 - [ ] **Multiple Search Engine Support**: Integrate additional search engines beyond Ahmia
-- [ ] **Multiple LLMs and Models**: Support for various AI models (GPT-4, Claude, etc.)
+- [x] **Multiple LLMs and Models**: Support for various AI models (GPT-4, Claude, etc.)
 - [x] **LangChain Integration**: Structured data extraction with Pydantic models
 
 - [ ] **Concurrent Tor Sessions**: Implement multiple Tor circuits for faster crawling
 - [ ] **Concurrent Analysis**: Parallel processing of multiple sites for improved speed
-- [ ] **PDF OSINT Report**: Generate comprehensive PDF reports with findings and analysis
+- [x] **PDF OSINT Report**: Generate comprehensive PDF reports with findings and analysis
 - [ ] **Real-time Monitoring**: Live tracking of onion sites and changes
 - [ ] **Advanced Analytics**: Machine learning-based threat detection
 - [ ] **API Rate Limiting**: Intelligent throttling to avoid detection
@@ -36,22 +36,30 @@
 - [ ] **Export Formats**: Support for CSV, JSON, XML exports
 - [ ] **Scheduled Scans**: Automated periodic monitoring of target sites
 
-## 🎯 Model Selection & Fallback
+## 🎯 Advanced Model Management
 
-The system now supports automatic model selection with intelligent fallback:
+The system now features comprehensive model management with intelligent fallback and optimization:
 
-### Available Models (in order of preference):
-1. **DeepSeek R1** (`deepseek/deepseek-r1:free`) - Primary choice
-2. **Claude 3.5 Sonnet** (`anthropic/claude-3.5-sonnet:free`) - Fallback 1
-3. **GPT-3.5 Turbo** (`openai/gpt-3.5-turbo:free`) - Fallback 2
-4. **Llama 3.1** (`meta-llama/llama-3.1-8b-instruct:free`) - Fallback 3
-5. **Gemini Flash** (`google/gemini-flash-1.5:free`) - Fallback 4
+### Supported Models & Providers:
+- **DeepSeek**: `deepseek/deepseek-r1:free`, `deepseek/deepseek-r1-0528:free`
+- **Anthropic Claude**: `anthropic/claude-3.5-sonnet:free`, `anthropic/claude-3-haiku:free`
+- **OpenAI GPT**: `openai/gpt-4:free`, `openai/gpt-3.5-turbo:free`
+- **Google Gemini**: `google/gemini-flash-1.5:free`
+- **Meta Llama**: `meta-llama/llama-3.1-8b-instruct:free`
 
-### Features:
-- ✅ **Automatic Selection**: Tests each model for availability
-- ✅ **Rate Limit Handling**: Switches to next model if rate limited
-- ✅ **Retry Logic**: Exponential backoff with model switching
-- ✅ **No More 429 Errors**: Automatic fallback to available models
+### Advanced Features:
+- ✅ **Model Validation**: Real-time availability checking with caching
+- ✅ **Intelligent Fallback**: Automatic switching to backup models
+- ✅ **Model-Specific Optimization**: Custom prompts and parameters per model
+- ✅ **Provider Management**: Support for 5+ AI providers via OpenRouter
+- ✅ **Cost Tracking**: Built-in cost per token tracking
+- ✅ **Performance Metrics**: Model-specific performance optimization
+- ✅ **API Endpoints**: Comprehensive model information API
+
+### New API Endpoints:
+- `GET /models` - List all available models
+- `GET /models/{model_id}` - Get detailed model information
+- `GET /models/provider/{provider}` - Get models by provider
 
 ## 🏗️ Architecture
 

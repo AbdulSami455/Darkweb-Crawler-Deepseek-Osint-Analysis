@@ -12,6 +12,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
 
 from .models import DarkWebAnalysis
+from .model_manager import ModelManager
 
 
 class LangChainAnalyzer:
@@ -25,7 +26,12 @@ class LangChainAnalyzer:
         
         # Use specified model or default
         self.model = model or os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-r1-0528:free")
-        self.llm = self._create_llm(self.model)
+        self.model_manager = ModelManager(self.api_key)
+        
+        # Get optimal parameters for the model
+        model_params = self.model_manager.get_optimal_parameters(self.model)
+        
+        self.llm = self._create_llm(self.model, model_params)
         
         self.parser = PydanticOutputParser(pydantic_object=DarkWebAnalysis)
         
@@ -35,14 +41,14 @@ class LangChainAnalyzer:
             ("human", self._get_human_prompt_template())
         ])
     
-    def _create_llm(self, model: str) -> ChatOpenAI:
-        """Create a ChatOpenAI instance with the specified model."""
+    def _create_llm(self, model: str, model_params: Dict[str, Any]) -> ChatOpenAI:
+        """Create a ChatOpenAI instance with the specified model and optimal parameters."""
         return ChatOpenAI(
             model=model,
             openai_api_key=self.api_key,
             openai_api_base="https://openrouter.ai/api/v1",
-            temperature=0.3,
-            max_tokens=2000,
+            temperature=model_params.get("temperature", 0.3),
+            max_tokens=model_params.get("max_tokens", 2000),
             headers={
                 "HTTP-Referer": "https://github.com/GENAI-RAG",
                 "X-Title": "OnionScrap-API",

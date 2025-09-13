@@ -61,6 +61,35 @@ def healthz() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/models")
+def get_models() -> Dict[str, Any]:
+    """Get information about available models."""
+    analyzer = OnionScrapAnalyzer()
+    return {
+        "available_models": analyzer.get_available_models(),
+        "recommended_models": analyzer.get_recommended_models(),
+        "all_models": analyzer.model_manager.get_all_models(),
+        "providers": ["openrouter", "openai", "anthropic", "google", "meta"]
+    }
+
+
+@app.get("/models/{model_id}")
+def get_model_info(model_id: str) -> Dict[str, Any]:
+    """Get detailed information about a specific model."""
+    analyzer = OnionScrapAnalyzer()
+    return analyzer.get_model_info(model_id)
+
+
+@app.get("/models/provider/{provider}")
+def get_models_by_provider(provider: str) -> Dict[str, List[str]]:
+    """Get all models from a specific provider."""
+    analyzer = OnionScrapAnalyzer()
+    return {
+        "provider": provider,
+        "models": analyzer.get_models_by_provider(provider)
+    }
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     analyzer = OnionScrapAnalyzer(model=req.model)

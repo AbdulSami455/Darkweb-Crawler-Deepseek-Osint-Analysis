@@ -19,6 +19,7 @@ import sys
 try:
     from .langchain_analysis import LangChainAnalyzer
     from .models import DarkWebAnalysis
+    from .model_manager import ModelManager
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
@@ -47,6 +48,7 @@ class OnionScrapAnalyzer:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         self.model = model or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+        self.model_manager = ModelManager(self.api_key)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}" if self.api_key else "",
             "Content-Type": "application/json",
@@ -269,16 +271,31 @@ class OnionScrapAnalyzer:
         return content or None, output_folder, result.stdout, result.stderr, debug_cmd
 
     def analyze_with_deepseek(self, content: str, analysis_prompt: Optional[str] = None, model: Optional[str] = None) -> Dict:
-        """Traditional JSON analysis using direct API calls with specified model."""
+        """Traditional JSON analysis using direct API calls with specified model and fallback logic."""
         if not self.api_key:
             return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
 
         # Use specified model or default
         selected_model = model or self.model
-        print(f"[OnionScrap] Using model: {selected_model}")
+        print(f"[OnionScrap] Attempting to use model: {selected_model}")
+
+        # Validate model and get fallback if needed
+        is_valid, validation_msg = self.model_manager.validate_model(selected_model)
+        if not is_valid:
+            print(f"[OnionScrap] Model validation failed: {validation_msg}")
+            fallback_model = self.model_manager.get_fallback_model(selected_model)
+            if fallback_model:
+                print(f"[OnionScrap] Using fallback model: {fallback_model}")
+                selected_model = fallback_model
+            else:
+                return {"success": False, "error": f"Model validation failed: {validation_msg}"}
+
+        # Get model-specific parameters
+        model_params = self.model_manager.get_optimal_parameters(selected_model)
+        print(f"[OnionScrap] Using model: {selected_model} with params: {model_params}")
 
         if not analysis_prompt:
-            analysis_prompt = (
+            base_prompt = (
                 """Analyze the following dark-web content captured from a .onion page and return ONLY JSON\n"""
                 """that matches the schema provided below.\n\n"""
                 """Tasks:\n"""
@@ -304,6 +321,8 @@ class OnionScrapAnalyzer:
                 """- For onion links: flag v2 as deprecated.\n"""
                 """- If non-English, include a short English summary and detected language.\n"""
             )
+            # Get model-specific optimized prompt
+            analysis_prompt = self.model_manager.get_model_specific_prompt(selected_model, base_prompt)
 
         payload = {
             "model": selected_model,
@@ -317,8 +336,8 @@ class OnionScrapAnalyzer:
                 },
                 {"role": "user", "content": f"{analysis_prompt}\n\nContent to analyze:\n{content[:4000]}"},
             ],
-            "max_tokens": 2000,
-            "temperature": 0.3,
+            "max_tokens": model_params.get("max_tokens", 2000),
+            "temperature": model_params.get("temperature", 0.3),
         }
 
         # Simple retry logic for network issues (not model switching)
@@ -365,7 +384,7 @@ class OnionScrapAnalyzer:
         return {"success": False, "error": "All retry attempts failed"}
 
     def analyze_with_langchain(self, content: str, model: Optional[str] = None) -> Dict:
-        """Structured analysis using LangChain and Pydantic models."""
+        """Structured analysis using LangChain and Pydantic models with model validation."""
         if not LANGCHAIN_AVAILABLE:
             return {
                 "success": False, 
@@ -375,14 +394,29 @@ class OnionScrapAnalyzer:
         if not self.api_key:
             return {"success": False, "error": "Missing OPENROUTER_API_KEY"}
 
+        # Use specified model or default
+        selected_model = model or self.model
+        print(f"[OnionScrap] LangChain attempting to use model: {selected_model}")
+
+        # Validate model and get fallback if needed
+        is_valid, validation_msg = self.model_manager.validate_model(selected_model)
+        if not is_valid:
+            print(f"[OnionScrap] LangChain model validation failed: {validation_msg}")
+            fallback_model = self.model_manager.get_fallback_model(selected_model)
+            if fallback_model:
+                print(f"[OnionScrap] LangChain using fallback model: {fallback_model}")
+                selected_model = fallback_model
+            else:
+                return {"success": False, "error": f"LangChain model validation failed: {validation_msg}"}
+
         try:
-            langchain_analyzer = LangChainAnalyzer(api_key=self.api_key, model=model)
-            result = langchain_analyzer.analyze_content_with_fallback(content, model)
+            langchain_analyzer = LangChainAnalyzer(api_key=self.api_key, model=selected_model)
+            result = langchain_analyzer.analyze_content_with_fallback(content, selected_model)
             
             # Add metadata about the analysis method
             if result["success"]:
                 result["analysis_method"] = "langchain_structured"
-                result["model"] = "deepseek/deepseek-r1-0528:free"
+                result["model"] = selected_model
             
             return result
             
@@ -471,5 +505,26 @@ class OnionScrapAnalyzer:
         }
         # Remove internal path details from response
         return response
+
+    def get_available_models(self) -> List[str]:
+        """Get list of currently available models."""
+        return self.model_manager.get_available_models()
+    
+    def get_recommended_models(self) -> List[str]:
+        """Get list of models recommended for OSINT analysis."""
+        return self.model_manager.get_recommended_models()
+    
+    def get_model_info(self, model_id: str) -> Dict[str, Any]:
+        """Get comprehensive information about a specific model."""
+        return self.model_manager.get_model_info(model_id)
+    
+    def get_models_by_provider(self, provider: str) -> List[str]:
+        """Get all models from a specific provider."""
+        from .model_manager import ModelProvider
+        try:
+            provider_enum = ModelProvider(provider.lower())
+            return self.model_manager.get_models_by_provider(provider_enum)
+        except ValueError:
+            return []
 
 
